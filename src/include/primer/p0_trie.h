@@ -302,8 +302,27 @@ class Trie {
     return false;
   }
 
-  void RemoveLoop(const std::string key, TrieNode &&trieNode, int idx) {
-    
+  void RemoveLoop(const std::string key, std::unique_ptr<TrieNode> *point, bool *is_find, int i) {
+    if (!*is_find) {
+      if (i >= key.size() || !point->get()->HasChild(key[i])) {
+        return;
+      } else if (i == key.size() - 1 && point->get()->GetChildNode(key[i])->get()->IsEndNode()) {
+        *is_find = true;
+      } else {
+        RemoveLoop(key, point->get()->GetChildNode(key[i]), is_find, i + 1);
+      }
+      if (*is_find) {
+        if (point->get()->GetChildNode(key[i])->get()->HasChildren()) {
+          point->get()->GetChildNode(key[i])->get()->SetEndNode(false);
+        } else {
+          point->get()->RemoveChildNode(key[i]);
+        }
+      } else if (point->get()->GetChildNode(key[i]) &&
+                !point->get()->GetChildNode(key[i])->get()->IsEndNode() &&
+                !point->get()->GetChildNode(key[i])->get()->HasChildren()) {
+        point->get()->RemoveChildNode(key[i]);
+      }
+    }
   }
   /**
    * TODO(P0): Add implementation
@@ -326,30 +345,9 @@ class Trie {
     if (key.empty()) {
       return false;
     }
-    auto *curr = &root_;
-    char tmp = key[0];
-    std::string sub = key.substr(1, key.size() - 1);
-    // if (curr->get()->HasChild(tmp)) {
-    //   if (curr->get()->GetChildNode(tmp)->get()->IsEndNode()) {
-    //     if (!curr->get()->GetChildNode(tmp)->get()->HasChildren()) {
-    //       curr->get()->RemoveChildNode(tmp);
-    //     }
-    //     return true;
-    //   } 
-    //   else {
-    //     if (!curr->get()->HasChildren()) {
-    //       return false;
-    //     }
-    //     return curr->get()->GetChildNode();
-    //   }
-    // }
-    // return false;
-    // for loop find terminal
-    for (char i : key) {
-      if (!curr->get()->HasChild(i)) {
-
-      }
-    }
+    bool is_find = false;
+    RemoveLoop(key, &root_, &is_find, key.size() - 1);
+    return is_find;
     }
 
   /**
