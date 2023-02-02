@@ -229,7 +229,7 @@ class TrieNodeWithValue : public TrieNode {
 };
 
 /**
- * Trie is a concurrent key-value store. Each key is a string and its corresponding
+ * Trie is a concurr key-value store. Each key is a string and its corresponding
  * value can be any type.
  */
 class Trie {
@@ -281,46 +281,49 @@ class Trie {
       return false;
     }
     /* loop curr to the last char */
-    for (int i = 0; i < key.size() - 2; ++i) {
+    for (std::size_t i = 0; i < key.size(); ++i) {
       if (!curr->get()->HasChild(key[i])) {
-        curr->get()->InsertChildNode(key[i], std::move(new TrieNode(key[i])));
+        curr->get()->InsertChildNode(key[i], std::make_unique<TrieNode>(key[i]));
       }
-      curr = curr->GetChildNode(key[i]);
+      curr = curr->get()->GetChildNode(key[i]);
     }
-    
-    char tmp = key[key.size()-1]
-    if (!curr->get()->HasChild(tmp)) {
-      curr = curr->get()->GetChildNode(tmp);
-      *curr = std::make_unique<TrieNodeWithValue<T>>(tmp, value);
+    if (curr == nullptr) {
+      *curr = std::make_unique<TrieNodeWithValue<T>>(key[key.size() - 1], value);
       return true;
     }
-    curr = curr->get()->GetChildNode(tmp);
-    if (!curr->get()->IsEndNode()) {
-      *curr = std::make_unique<TrieNodeWithValue<T>>(std::move(*current.get()), value);
+    if (curr->get()->IsEndNode()) {  // 已经存在TrieNode且该TrieNode是key的结尾, 因为key不能重复插入失败
+      return false;
+    }
+    if (dynamic_cast<TrieNodeWithValue<T> *>(curr->get()) == nullptr) {  // 已经存在TrieNode, 但该TrieNode并不是key的结尾, 换言之不是TrieNodeWithValue<T>对象
+      *curr = std::make_unique<TrieNodeWithValue<T>>(std::move(*(curr->get())), value);
       return true;
     }
     return false;
   }
 
-  void RemoveLoop(const std::string key, std::unique_ptr<TrieNode> *point, bool *is_find, int i) {
-    if (!*is_find) {
-      if (i >= key.size() || !point->get()->HasChild(key[i])) {
+ void RemoveLoop(const std::string &key, std::unique_ptr<TrieNode> *parent, bool *isfind, size_t idx) {
+    if (!*isfind) {
+      if (idx >= key.size() || !parent->get()->HasChild(key[idx])) {
         return;
-      } else if (i == key.size() - 1 && point->get()->GetChildNode(key[i])->get()->IsEndNode()) {
-        *is_find = true;
-      } else {
-        RemoveLoop(key, point->get()->GetChildNode(key[i]), is_find, i + 1);
       }
-      if (*is_find) {
-        if (point->get()->GetChildNode(key[i])->get()->HasChildren()) {
-          point->get()->GetChildNode(key[i])->get()->SetEndNode(false);
-        } else {
-          point->get()->RemoveChildNode(key[i]);
+      if (idx == key.size() - 1) {
+        *isfind = true;
+      } else {
+        RemoveLoop(key, parent->get()->GetChildNode(key[idx]), isfind, idx + 1);
         }
-      } else if (point->get()->GetChildNode(key[i]) &&
-                !point->get()->GetChildNode(key[i])->get()->IsEndNode() &&
-                !point->get()->GetChildNode(key[i])->get()->HasChildren()) {
-        point->get()->RemoveChildNode(key[i]);
+    }
+    if (*isfind) {
+      if (idx == key.size() - 1) {
+        if (!parent->get()->GetChildNode(key[idx])->get()->HasChildren()) {
+          parent->get()->RemoveChildNode(key[idx]);
+        } else {
+          parent->get()->GetChildNode(key[idx])->get()->SetEndNode(false);
+        }
+      } else {
+        if (!parent->get()->GetChildNode(key[idx])->get()->IsEndNode() &&
+            !parent->get()->GetChildNode(key[idx])->get()->HasChildren()) {
+          parent->get()->RemoveChildNode(key[idx]);
+        }
       }
     }
   }
@@ -346,7 +349,8 @@ class Trie {
       return false;
     }
     bool is_find = false;
-    RemoveLoop(key, &root_, &is_find, key.size() - 1);
+    RemoveLoop(key, &root_, &is_find, 0);
+    // std::cout << "res is: " << is_find << std::endl;
     return is_find;
     }
 
@@ -371,7 +375,27 @@ class Trie {
   template <typename T>
   T GetValue(const std::string &key, bool *success) {
     *success = false;
-    return {};
+    if (key.empty()) {
+      return {};
+    }
+    auto *curr = &root_;
+    /* loop curr to the last char */
+    for (size_t i = 0; i < key.size(); ++i) {
+      if (curr->get()->HasChild(key[i])) {
+        curr = curr->get()->GetChildNode(key[i]);
+      } else {
+        return {};
+      }     
+    }
+    if (!curr->get()->IsEndNode()) {
+      return {};
+    }
+    auto* end_value = dynamic_cast<TrieNodeWithValue<T> *>(curr->get());
+    if (end_value == nullptr) {
+      return {};
+    }
+    *success = true;
+    return end_value->GetValue();
   }
 };
 }  // namespace bustub
