@@ -276,8 +276,10 @@ class Trie {
    */
   template <typename T>
   bool Insert(const std::string &key, T value) {
+    latch_.WLock();
     auto *curr = &root_;
     if (key.empty()) {
+      latch_.WUnlock();
       return false;
     }
     /* loop curr to the last char */
@@ -289,15 +291,19 @@ class Trie {
     }
     if (curr == nullptr) {
       *curr = std::make_unique<TrieNodeWithValue<T>>(key[key.size() - 1], value);
+      latch_.WUnlock();
       return true;
     }
     if (curr->get()->IsEndNode()) {  // 已经存在TrieNode且该TrieNode是key的结尾, 因为key不能重复插入失败
+      latch_.WUnlock();
       return false;
     }
     if (dynamic_cast<TrieNodeWithValue<T> *>(curr->get()) == nullptr) {  // 已经存在TrieNode, 但该TrieNode并不是key的结尾, 换言之不是TrieNodeWithValue<T>对象
       *curr = std::make_unique<TrieNodeWithValue<T>>(std::move(*(curr->get())), value);
+      latch_.WUnlock();
       return true;
     }
+    latch_.WUnlock();
     return false;
   }
 
@@ -345,12 +351,15 @@ class Trie {
    * @return True if the key exists and is removed, false otherwise
    */
   bool Remove(const std::string &key) {  
+    latch_.WLock();
     if (key.empty()) {
+      latch_.WUnlock();
       return false;
     }
     bool is_find = false;
     RemoveLoop(key, &root_, &is_find, 0);
     // std::cout << "res is: " << is_find << std::endl;
+    latch_.WUnlock();
     return is_find;
     }
 
@@ -374,8 +383,10 @@ class Trie {
    */
   template <typename T>
   T GetValue(const std::string &key, bool *success) {
+    latch_.RLock();
     *success = false;
     if (key.empty()) {
+      latch_.RUnlock();
       return {};
     }
     auto *curr = &root_;
@@ -384,17 +395,21 @@ class Trie {
       if (curr->get()->HasChild(key[i])) {
         curr = curr->get()->GetChildNode(key[i]);
       } else {
+        latch_.RUnlock();
         return {};
       }     
     }
     if (!curr->get()->IsEndNode()) {
+      latch_.RUnlock();
       return {};
     }
     auto* end_value = dynamic_cast<TrieNodeWithValue<T> *>(curr->get());
     if (end_value == nullptr) {
+      latch_.RUnlock();
       return {};
     }
     *success = true;
+    latch_.RUnlock();
     return end_value->GetValue();
   }
 };
